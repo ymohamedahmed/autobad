@@ -17,8 +17,8 @@ class Tensor:
     grad: Optional[np.array] = None
 
 
-OperatorType = Callable[[np.array, ...], Tuple[np.array, Callable[np.array],
-                                               ...]]
+Vjp = Callable[[np.array], np.array]
+OperatorType = Callable[Sequence[np.array], Tuple[np.array, Sequence[Vjp]]]
 
 
 def op_wrapper(op: OperatorType):
@@ -42,9 +42,7 @@ def op_wrapper(op: OperatorType):
     return wrapper_operator
 
 
-Vjp = Callable[[np.array], np.array]
 graph: Dict[Tensor, List[Tuple[Vjp, Tensor]]] = defaultdict(list)
-
 _linear = lambda W, b, x: (np.matmul(W, x) + b, lambda g: g[:, None] *
                            (x * np.ones_like(W)), lambda g: g * np.ones_like(
                                b), lambda g: np.matmul(g, W))
@@ -79,69 +77,4 @@ def backward(node: Tensor) -> None:
 
         queue += [(child, vjp, grandkids)
                   for (vjp, grandkids) in graph[id(child)]]
-    graph = defaultdict(list)
-
-
-np.random.seed(42)
-t = Tensor(np.random.rand(10))
-yhat = Tensor(np.random.rand(10), need_grad=False)
-# print(t.value.shape)
-y = cos(t)
-l = mse(y, yhat)
-# print(l.value.shape)
-# print(y)
-backward(l)
-print(f"T grad")
-print(t.grad)
-# print(y.grad)
-
-import jax.numpy as jnp
-from jax import grad
-
-print("Jax grad")
-grad_fn = grad(lambda x: ((yhat.value - jnp.cos(x))**2).mean())
-print(grad_fn(t.value))
-
-print("LINEAR layer")
-graph = defaultdict(list)
-W = Tensor(np.random.rand(5, 10))
-b = Tensor(np.random.rand(5))
-t = Tensor(np.random.rand(10))
-yhat = Tensor(np.random.rand(5), need_grad=False)
-y = linear(W, b, t)
-# y = relu(y)
-mse(y, yhat)
-l = mse(y, yhat)
-backward(l)
-grad_fn = grad(lambda W1, b, t: ((yhat.value - (W1 @ t + b))**2).mean(),
-               argnums=[0, 1, 2])
-print("jax grad")
-print(grad_fn(W.value, b.value, t.value))
-print("ours")
-print(W.grad)
-print(b.grad)
-print(t.grad)
-# testing multiple paths
-# i.e grad wrt. W when y = W((Wx + b1) + b2)
-print("Multi test")
-graph = defaultdict(list)
-
-# gph = {
-#     id(val): (name, val)
-#     for (name,
-#          val) in [("W", W), ("b1",
-#                              b1), ("b2",
-#                                    b2), ("t", t), ("yhat",
-#                                                    yhat), ("y1",
-#                                                            y1), ("y2",
-#                                                                  y2), ("l", l)]
-# }
-print(f"T5: {t.grad}")
-for i, neigh in graph.items():
-    neigh_names = []
-    for (v1, v2) in neigh:
-        neigh_names.append(gph[id(v2)][0])
-    print(f"{gph[i][0]} {neigh_names}")
-from jax import value_and_grad
-
-# pdb.set_trace()
+    # graph = defaultdict(list)

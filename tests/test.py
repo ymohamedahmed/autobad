@@ -41,3 +41,8 @@ def test_reused_parameter():
     assert np.allclose(b1.grad, grads[1])
     assert np.allclose(b2.grad, grads[2])
     assert np.allclose(l.value, value)
+
+
+def test_multiple_backwards():
+    test_cos()
+    test_reused_parameter()
