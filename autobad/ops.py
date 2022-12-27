@@ -1,6 +1,6 @@
 import numpy as np
-from typing import Sequence
-from autobad.typing import OperatorType
+from typing import Sequence, Tuple
+from autobad.typing import OperatorType, Vjp
 from autobad.core import Tensor
 from autobad.graph import Graph
 
@@ -10,10 +10,13 @@ eps = 1e-9
 def op_wrapper(op: OperatorType):
     """
         Purpose of this decorator is to modify the graph structure 
-        when an operator is called.
+        when an operator is called. It also allows us to defined ops
+        based on np arrays, rather than calling Tensor.value. 
 
-        Suppose c= op(a,b), we add edges a->c and b->c to the graph.
-        The edge contains the vector Jacobian product.
+        Suppose c= op(a,b), we add edges c->a and c->b to the graph.
+        The edge is the vector Jacobian product, i.e. an edge, c->b,
+        is the function g*dc/db where g is the incoming gradient. 
+        This might be the gradient of a loss wrt. c for example.
     """
 
     def wrapper_operator(*inputs: Sequence[Tensor]):
@@ -22,32 +25,37 @@ def op_wrapper(op: OperatorType):
         result, vjps = output[0], output[1:]
         children = [(v, i) for (v, i) in zip(vjps, inputs) if i.need_grad]
         result = Tensor(result, need_grad=len(children) > 0)
-        Graph.add(result, children)
+        if result.need_grad:
+            Graph.add(result, children)
         return result
 
     return wrapper_operator
 
 
-_linear = lambda W, b, x: (np.matmul(W, x) + b, lambda g: g[:, None] *
-                           (x * np.ones_like(W)), lambda g: g * np.ones_like(
-                               b), lambda g: np.matmul(g, W))
-linear = op_wrapper(_linear)
-
-_cos = lambda x: (np.cos(x), lambda g: -np.sin(x) * g)
-cos = op_wrapper(_cos)
-
-_mse = lambda x, y: (((x - y)**2).mean().reshape(1), lambda _: 2 / x.shape[0] *
-                     (x - y), lambda _: 2 / x.shape[0] * (y - x))
-mse = op_wrapper(_mse)
-
-_sin = lambda x: (np.sin(x), lambda g: np.cos(x) * g)
-sin = op_wrapper(_sin)
-
-_relu = lambda x: (np.maximum(0, x), lambda g: g * (x >= 0))
-relu = op_wrapper(_relu)
+@op_wrapper
+def linear(W: np.array, b: np.array,
+           x: np.array) -> Tuple[np.array, Vjp, Vjp, Vjp]:
+    return np.matmul(W, x) + b, lambda g: g[:, None] * (x * np.ones_like(
+        W)), lambda g: g * np.ones_like(b), lambda g: np.matmul(g, W)
 
 
-def _softmax_forward(x: np.array) -> np.array:
+@op_wrapper
+def cos(x: np.array) -> Tuple[np.array, Vjp]:
+    return np.cos(x), lambda g: -np.sin(x) * g
+
+
+@op_wrapper
+def sin(x: np.array) -> Tuple[np.array, Vjp]:
+    return np.sin(x), lambda g: np.cos(x) * g
+
+
+@op_wrapper
+def relu(x: np.array) -> Tuple[np.array, Vjp]:
+    return np.maximum(0, x), lambda g: g * (x >= 0)
+
+
+@op_wrapper
+def softmax(x: np.array) -> Tuple[np.array, Vjp]:
     s = np.exp(x - np.max(x))
     result = s / s.sum()
     return result, lambda g: np.matmul(
@@ -55,9 +63,16 @@ def _softmax_forward(x: np.array) -> np.array:
         np.diag(result) - np.outer(result, result))
 
 
-_softmax = lambda x: _softmax_forward(x)
-softmax = op_wrapper(_softmax)
+@op_wrapper
+def cross_entropy(y_true: np.array,
+                  y_pred: np.array) -> Tuple[np.array, Vjp, Vjp]:
+    """Here we assume there is no downstream gradient."""
+    return -np.sum(y_true * np.log(y_pred + eps)).reshape(
+        1), lambda _: -np.log(y_pred + eps), lambda _: -y_true / (y_pred + eps)
 
-_cross_entropy = lambda yhat, y: (-np.sum(yhat * np.log(y + eps)).reshape(
-    1), lambda _: -np.log(y + eps), lambda _: -yhat / (y + eps))
-cross_entropy = op_wrapper(_cross_entropy)
+
+@op_wrapper
+def mse(x: np.array, y: np.array) -> Tuple[np.array, Vjp, Vjp]:
+    """Symmetric."""
+    return ((x - y)**2).mean().reshape(1), lambda _: 2 / x.shape[0] * (
+        x - y), lambda _: 2 / x.shape[0] * (y - x)

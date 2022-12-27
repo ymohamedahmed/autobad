@@ -1,6 +1,7 @@
 import numpy as np
 from autobad.ops import linear, mse, cos, relu, softmax, cross_entropy
 from autobad.core import Tensor, backward
+from autobad.graph import Graph
 import jax
 from jax import value_and_grad
 import jax.numpy as jnp
@@ -90,28 +91,45 @@ def test_softmax():
 
 def test_cross_entropy():
     import torch
+    import torch.nn.functional as F
     x = Tensor(np.random.rand(10))
     W = Tensor(np.random.rand(10, 10))
     b = Tensor(np.random.rand(10))
 
-    yhat = np.random.rand(10)
-    yhat = yhat / yhat.sum()
-    yhat = Tensor(yhat, need_grad=False)
+    y_true = np.random.rand(10)
+    y_true = y_true / y_true.sum()
+    y_true = Tensor(y_true, need_grad=False)
 
     y1 = linear(W, b, x)
     y2 = softmax(y1)
-    l = cross_entropy(yhat, y2)
+    l = cross_entropy(y_true, y2)
+    # l = cross_entropy(y2, y_true)
     backward(l)
     value, grads = value_and_grad(
         lambda W, b, x:
-        (-yhat.value * jnp.log(jax.nn.softmax(W @ x + b))).sum(),
+        (-y_true.value * jnp.log(jax.nn.softmax(W @ x + b))).sum(),
         argnums=[0, 1, 2])(W.value, b.value, x.value)
 
-    torch_answer = torch.nn.CrossEntropyLoss()(torch.Tensor(y1.value),
-                                               torch.Tensor(yhat.value))
+    # use y1 here since torch takes softmax
+    torch_answer = F.cross_entropy(torch.Tensor(y1.value),
+                                   torch.Tensor(y_true.value))
 
+    print(value)
     assert np.allclose(l.value, torch_answer)
     assert np.allclose(l.value, value)
     assert np.allclose(W.grad, grads[0])
     assert np.allclose(b.grad, grads[1])
     assert np.allclose(x.grad, grads[2])
+
+
+def test_need_grad():
+    x = Tensor(np.random.rand(10), need_grad=False)
+    W = Tensor(np.random.rand(10, 10), need_grad=False)
+    b = Tensor(np.random.rand(10), need_grad=False)
+
+    yhat = Tensor(np.random.rand(10), need_grad=False)
+    y1 = linear(W, b, x)
+    y2 = softmax(y1)
+    l = mse(y2, yhat)
+
+    assert len(Graph.get_instance()._graph.keys()) == 0
