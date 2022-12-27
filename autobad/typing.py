@@ -1,4 +1,5 @@
 from typing import Callable, Sequence, Tuple
+
 import numpy as np
 
 Vjp = Callable[[np.array], np.array]

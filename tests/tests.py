@@ -1,10 +1,11 @@
+import jax
+import jax.numpy as jnp
 import numpy as np
-from autobad.ops import linear, mse, cos, relu, softmax, cross_entropy
+from jax import value_and_grad
+
 from autobad.core import Tensor, backward
 from autobad.graph import Graph
-import jax
-from jax import value_and_grad
-import jax.numpy as jnp
+from autobad.ops import cos, cross_entropy, linear, mse, relu, softmax
 
 
 def test_cos():
@@ -13,8 +14,9 @@ def test_cos():
     y = cos(x)
     l = mse(y, yhat)
     backward(l)
-    value, grad = value_and_grad(
-        lambda x1: ((yhat.value - jnp.cos(x1))**2).mean())(x.value)
+    value, grad = value_and_grad(lambda x1: ((yhat.value - jnp.cos(x1)) ** 2).mean())(
+        x.value
+    )
     assert np.allclose(l.value, value)
     assert np.allclose(x.grad, grad)
 
@@ -36,10 +38,12 @@ def test_reused_parameter():
     l = mse(y2, yhat)
     backward(l)
 
-    value, grads = value_and_grad(lambda W, b1, b2: (
-        (yhat.value.copy() - (W @ (W @ t.value + b1) + b2))**2).mean(),
-                                  argnums=[0, 1, 2])(W.value, b1.value,
-                                                     b2.value)
+    value, grads = value_and_grad(
+        lambda W, b1, b2: (
+            (yhat.value.copy() - (W @ (W @ t.value + b1) + b2)) ** 2
+        ).mean(),
+        argnums=[0, 1, 2],
+    )(W.value, b1.value, b2.value)
     assert np.allclose(W.grad, grads[0])
     assert np.allclose(b1.grad, grads[1])
     assert np.allclose(b2.grad, grads[2])
@@ -61,9 +65,10 @@ def test_relu():
     y2 = relu(y1)
     l = mse(y2, yhat)
     backward(l)
-    value, grads = value_and_grad(lambda W, b, x: (
-        (yhat.value - jax.nn.relu(W @ x + b))**2).mean(),
-                                  argnums=[0, 1, 2])(W.value, b.value, x.value)
+    value, grads = value_and_grad(
+        lambda W, b, x: ((yhat.value - jax.nn.relu(W @ x + b)) ** 2).mean(),
+        argnums=[0, 1, 2],
+    )(W.value, b.value, x.value)
     assert np.allclose(l.value, value)
     assert np.allclose(W.grad, grads[0])
     assert np.allclose(b.grad, grads[1])
@@ -80,9 +85,10 @@ def test_softmax():
     y2 = softmax(y1)
     l = mse(y2, yhat)
     backward(l)
-    value, grads = value_and_grad(lambda W, b, x: (
-        (yhat.value - jax.nn.softmax(W @ x + b))**2).mean(),
-                                  argnums=[0, 1, 2])(W.value, b.value, x.value)
+    value, grads = value_and_grad(
+        lambda W, b, x: ((yhat.value - jax.nn.softmax(W @ x + b)) ** 2).mean(),
+        argnums=[0, 1, 2],
+    )(W.value, b.value, x.value)
     assert np.allclose(l.value, value)
     assert np.allclose(W.grad, grads[0])
     assert np.allclose(b.grad, grads[1])
@@ -92,6 +98,7 @@ def test_softmax():
 def test_cross_entropy():
     import torch
     import torch.nn.functional as F
+
     x = Tensor(np.random.rand(10))
     W = Tensor(np.random.rand(10, 10))
     b = Tensor(np.random.rand(10))
@@ -106,13 +113,12 @@ def test_cross_entropy():
     # l = cross_entropy(y2, y_true)
     backward(l)
     value, grads = value_and_grad(
-        lambda W, b, x:
-        (-y_true.value * jnp.log(jax.nn.softmax(W @ x + b))).sum(),
-        argnums=[0, 1, 2])(W.value, b.value, x.value)
+        lambda W, b, x: (-y_true.value * jnp.log(jax.nn.softmax(W @ x + b))).sum(),
+        argnums=[0, 1, 2],
+    )(W.value, b.value, x.value)
 
     # use y1 here since torch takes softmax
-    torch_answer = F.cross_entropy(torch.Tensor(y1.value),
-                                   torch.Tensor(y_true.value))
+    torch_answer = F.cross_entropy(torch.Tensor(y1.value), torch.Tensor(y_true.value))
 
     print(value)
     assert np.allclose(l.value, torch_answer)

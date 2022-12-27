@@ -1,7 +1,8 @@
 from collections import defaultdict
-from typing import List, Tuple, Dict
-from autobad.typing import Vjp
+from typing import Dict, List, Tuple
+
 import autobad as ab
+from autobad.typing import Vjp
 
 
 class Graph:
@@ -18,8 +19,7 @@ class Graph:
             raise Exception("This class is a singleton!")
         else:
             Graph.__instance = self
-        self._graph: Dict[ab.Tensor,
-                          List[Tuple[Vjp, ab.Tensor]]] = defaultdict(list)
+        self._graph: Dict[ab.Tensor, List[Tuple[Vjp, ab.Tensor]]] = defaultdict(list)
 
     @staticmethod
     def clear() -> None:

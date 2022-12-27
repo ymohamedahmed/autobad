@@ -1,5 +1,6 @@
-from core import Tensor
 from typing import List
+
+from core import Tensor
 
 
 def sgd(parameters: List[Tensor], lr: float) -> None:
