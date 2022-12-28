@@ -5,7 +5,6 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from autobad.typing import Vjp
-
 """
 Simple implementation of eager, reverse-mode and vectorized autodiff. Only dependency is numpy.
 
@@ -19,6 +18,7 @@ class Tensor:
     value: np.array
     need_grad: Optional[bool] = True
     grad: Optional[np.array] = None
+    _count: Optional[int] = 0
 
 
 def backward(node: Tensor) -> None:
@@ -35,8 +35,12 @@ def backward(node: Tensor) -> None:
     while not queue.empty():
         parent, vjp, child = queue.get()
         downstream = parent.grad
-        child.grad = (
-            vjp(downstream) if child.grad is None else child.grad + vjp(downstream)
-        )
-        many_put([(child, vjp, grandkids) for (vjp, grandkids) in Graph.get(child)])
+        child._count += 1
+        child.grad = vjp(
+            downstream) if child.grad is None else child.grad + vjp(downstream)
+        # child.grad = vjp(downstream) if child.grad is None else (
+        #     child.grad * (child._count - 1)) + (vjp(downstream) /
+        #                                         (child._count + 1))
+        many_put([(child, vjp, grandkids)
+                  for (vjp, grandkids) in Graph.get(child)])
     Graph.clear()

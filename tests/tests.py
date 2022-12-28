@@ -14,9 +14,8 @@ def test_cos():
     y = cos(x)
     l = mse(y, yhat)
     backward(l)
-    value, grad = value_and_grad(lambda x1: ((yhat.value - jnp.cos(x1)) ** 2).mean())(
-        x.value
-    )
+    value, grad = value_and_grad(
+        lambda x1: ((yhat.value - jnp.cos(x1))**2).mean())(x.value)
     assert np.allclose(l.value, value)
     assert np.allclose(x.grad, grad)
 
@@ -39,9 +38,8 @@ def test_reused_parameter():
     backward(l)
 
     value, grads = value_and_grad(
-        lambda W, b1, b2: (
-            (yhat.value.copy() - (W @ (W @ t.value + b1) + b2)) ** 2
-        ).mean(),
+        lambda W, b1, b2: ((yhat.value.copy() -
+                            (W @ (W @ t.value + b1) + b2))**2).mean(),
         argnums=[0, 1, 2],
     )(W.value, b1.value, b2.value)
     assert np.allclose(W.grad, grads[0])
@@ -66,7 +64,7 @@ def test_relu():
     l = mse(y2, yhat)
     backward(l)
     value, grads = value_and_grad(
-        lambda W, b, x: ((yhat.value - jax.nn.relu(W @ x + b)) ** 2).mean(),
+        lambda W, b, x: ((yhat.value - jax.nn.relu(W @ x + b))**2).mean(),
         argnums=[0, 1, 2],
     )(W.value, b.value, x.value)
     assert np.allclose(l.value, value)
@@ -86,7 +84,7 @@ def test_softmax():
     l = mse(y2, yhat)
     backward(l)
     value, grads = value_and_grad(
-        lambda W, b, x: ((yhat.value - jax.nn.softmax(W @ x + b)) ** 2).mean(),
+        lambda W, b, x: ((yhat.value - jax.nn.softmax(W @ x + b))**2).mean(),
         argnums=[0, 1, 2],
     )(W.value, b.value, x.value)
     assert np.allclose(l.value, value)
@@ -113,14 +111,15 @@ def test_cross_entropy():
     # l = cross_entropy(y2, y_true)
     backward(l)
     value, grads = value_and_grad(
-        lambda W, b, x: (-y_true.value * jnp.log(jax.nn.softmax(W @ x + b))).sum(),
+        lambda W, b, x:
+        (-y_true.value * jnp.log(jax.nn.softmax(W @ x + b))).sum(),
         argnums=[0, 1, 2],
     )(W.value, b.value, x.value)
 
     # use y1 here since torch takes softmax
-    torch_answer = F.cross_entropy(torch.Tensor(y1.value), torch.Tensor(y_true.value))
+    torch_answer = F.cross_entropy(torch.Tensor(y1.value),
+                                   torch.Tensor(y_true.value))
 
-    print(value)
     assert np.allclose(l.value, torch_answer)
     assert np.allclose(l.value, value)
     assert np.allclose(W.grad, grads[0])
