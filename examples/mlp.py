@@ -1,7 +1,9 @@
+from typing import List
 from sklearn.datasets import make_regression
+import more_itertools
 from sklearn.model_selection import train_test_split
 
-from autobad import Tensor, linear, relu, softmax, sgd, mse, backward
+from autobad import Tensor, linear, relu, softmax, sgd, mse, backward, mean
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -16,9 +18,14 @@ def train():
         Tensor(np.random.randn(1, 50)),
         Tensor(np.random.rand(1))
     ]
-    n_epochs = 100
-    batch_size = 128
+    n_epochs = 400
+    batch_size = 512
     train_losses = []
+
+    def running_mean(params: List[Tensor], count: int) -> None:
+        # p.grad contains
+        for p in params:
+            p.grad = p.grad / (count - 1)
 
     def forward(x: np.array, y: np.array) -> float:
         x = Tensor(x, need_grad=False)
@@ -29,13 +36,15 @@ def train():
         return mse(y, y2)
 
     for _ in range(n_epochs):
-        batch_indxs = np.random.randint(low=0,
-                                        high=len(X_train),
-                                        size=batch_size)
+        indxs = np.random.permutation(np.arange(len(X_train)))
+        batch_indxs = more_itertools.chunked(indxs, n=batch_size)
+        losses = []
         for (x, y) in zip(X_train[batch_indxs], y_train[batch_indxs]):
-            loss = forward(x, y)
-            backward(loss)
-            train_losses.append(loss.value[0])
+            losses.append(forward(x, y))
+
+        mean_loss = mean(*losses)
+        backward(mean_loss)
+        train_losses.append(mean_loss.value[0])
 
         sgd(params, lr=1e-2, batch_size=batch_size)
     print(train_losses[-15:])

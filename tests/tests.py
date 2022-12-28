@@ -138,3 +138,7 @@ def test_need_grad():
     l = mse(y2, yhat)
 
     assert len(Graph.get_instance()._graph.keys()) == 0
+
+
+def test_mean():
+    pass
