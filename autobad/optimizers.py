@@ -1,13 +1,9 @@
-from typing import List, Optional
+from typing import List
 
-import numpy as np
 from autobad.core import Tensor
 
 
-def sgd(parameters: List[Tensor],
-        lr: float,
-        average_gradients: bool = False,
-        batch_size: Optional[int] = None) -> None:
+def sgd(parameters: List[Tensor], lr: float) -> None:
     for p in parameters:
-        p.value = p.value - (lr * p.grad / batch_size)
+        p.value = p.value - (lr * p.grad)
         p.grad = None

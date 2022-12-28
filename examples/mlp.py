@@ -1,11 +1,14 @@
 from typing import List
-from sklearn.datasets import make_regression
+
 import more_itertools
+import numpy as np
+import pandas as pd
+import plotly.express as px
+from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
-from autobad import Tensor, linear, relu, softmax, sgd, mse, backward, mean
-import numpy as np
-import matplotlib.pyplot as plt
+from autobad import Tensor, backward, linear, mean, mse, relu, sgd
+from autobad.utils import graph_viz
 
 
 def train():
@@ -16,16 +19,11 @@ def train():
         Tensor(np.random.rand(50, 100)),
         Tensor(np.random.rand(50)),
         Tensor(np.random.randn(1, 50)),
-        Tensor(np.random.rand(1))
+        Tensor(np.random.rand(1)),
     ]
-    n_epochs = 400
-    batch_size = 512
+    n_epochs = 100
+    batch_size = 16
     train_losses = []
-
-    def running_mean(params: List[Tensor], count: int) -> None:
-        # p.grad contains
-        for p in params:
-            p.grad = p.grad / (count - 1)
 
     def forward(x: np.array, y: np.array) -> float:
         x = Tensor(x, need_grad=False)
@@ -35,25 +33,40 @@ def train():
         y2 = linear(params[2], params[3], y1)
         return mse(y, y2)
 
-    for _ in range(n_epochs):
+    for n_epoch in range(n_epochs):
         indxs = np.random.permutation(np.arange(len(X_train)))
-        batch_indxs = more_itertools.chunked(indxs, n=batch_size)
-        losses = []
-        for (x, y) in zip(X_train[batch_indxs], y_train[batch_indxs]):
-            losses.append(forward(x, y))
+        batches = more_itertools.chunked(indxs, n=batch_size)
+        batch_losses = []
+        for indxs in batches:
+            samples_losses = []
+            for (x, y) in zip(X_train[indxs], y_train[indxs]):
+                samples_losses.append(forward(x, y))
 
-        mean_loss = mean(*losses)
-        backward(mean_loss)
-        train_losses.append(mean_loss.value[0])
+            batch_loss = mean(*samples_losses)
+            if n_epoch == 0:
+                graph_viz(
+                    {
+                        id(params[0]): "W0",
+                        id(params[1]): "b0",
+                        id(params[2]): "W1",
+                        id(params[3]): "b1",
+                        id(batch_loss): "batch_loss",
+                    }
+                )
 
-        sgd(params, lr=1e-2, batch_size=batch_size)
+            backward(batch_loss)
+            sgd(params, lr=1e-3)
+            batch_losses.append(batch_loss.value[0])
+        train_losses.append(sum(batch_losses) / len(batch_losses))
     print(train_losses[-15:])
 
     test_loss = np.array(
-        [forward(x, y).value[0] for (x, y) in zip(X_test, y_test)]).mean()
-    print(test_loss)
-    plt.plot(np.arange(len(train_losses)), train_losses)
-    plt.show()
+        [forward(x, y).value[0] for (x, y) in zip(X_test, y_test)]
+    ).mean()
+    print(f"{test_loss=}")
+    df = pd.DataFrame({"Epoch": np.arange(len(train_losses)), "MSE": train_losses})
+    fig = px.line(df, x="Epoch", y="MSE")
+    fig.show()
 
 
 if __name__ == "__main__":

@@ -25,22 +25,24 @@ def op_wrapper(op: OperatorType):
         values = [i.value for i in inputs]
         result, vjps = op(*values)
         children = [(v, i) for (v, i) in zip(vjps, inputs) if i.need_grad]
-        result = Tensor(result, need_grad=len(children) > 0)
-        if result.need_grad:
-            Graph.add(result, children)
-        return result
+        tensor = Tensor(result, need_grad=len(children) > 0)
+        if tensor.need_grad:
+            Graph.add(tensor, children)
+        return tensor
 
     return wrapper_operator
 
 
 @op_wrapper
-def linear(W: np.array, b: np.array,
-           x: np.array) -> Tuple[np.array, Sequence[Vjp]]:
-    return (np.matmul(W, x) + b, [
-        lambda g: g[:, None] * (x * np.ones_like(W)),
-        lambda g: g * np.ones_like(b),
-        lambda g: np.matmul(g, W),
-    ])
+def linear(W: np.array, b: np.array, x: np.array) -> Tuple[np.array, Sequence[Vjp]]:
+    return (
+        np.matmul(W, x) + b,
+        [
+            lambda g: g[:, None] * (x * np.ones_like(W)),
+            lambda g: g * np.ones_like(b),
+            lambda g: np.matmul(g, W),
+        ],
+    )
 
 
 @op_wrapper
@@ -62,28 +64,22 @@ def relu(x: np.array) -> Tuple[np.array, Sequence[Vjp]]:
 def softmax(x: np.array) -> Tuple[np.array, Sequence[Vjp]]:
     s = np.exp(x - np.max(x))
     result = s / s.sum()
-    return result, [
-        lambda g: np.matmul(g,
-                            np.diag(result) - np.outer(result, result))
-    ]
+    return result, [lambda g: np.matmul(g, np.diag(result) - np.outer(result, result))]
 
 
-def safe_downstream(downstream: Optional[np.array],
-                    shape: Tuple[int]) -> np.array:
+def safe_downstream(downstream: Optional[np.array], shape: Tuple[int]) -> np.array:
     """Used to protect against cases where the incoming gradient may feasibly not exist. E.g. for a loss function."""
     return np.ones(shape) if downstream is None else downstream
 
 
 @op_wrapper
-def cross_entropy(y_true: np.array,
-                  y_pred: np.array) -> Tuple[np.array, Vjp, Vjp]:
+def cross_entropy(y_true: np.array, y_pred: np.array) -> Tuple[np.array, Sequence[Vjp]]:
     """Here we assume there is no downstream gradient."""
     return (
         -np.sum(y_true * np.log(y_pred + eps)).reshape(1),
         [
             lambda g: -safe_downstream(g, y_true.shape) * np.log(y_pred + eps),
-            lambda g: -safe_downstream(g, y_true.shape) * (y_true /
-                                                           (y_pred + eps))
+            lambda g: -safe_downstream(g, y_true.shape) * (y_true / (y_pred + eps)),
         ],
     )
 
@@ -92,10 +88,10 @@ def cross_entropy(y_true: np.array,
 def mse(x: np.array, y: np.array) -> Tuple[np.array, Sequence[Vjp]]:
     """Function is symmetric, hence the ambigious parameter names."""
     return (
-        ((x - y)**2).mean().reshape(1),
+        ((x - y) ** 2).mean().reshape(1),
         [
             lambda g: safe_downstream(g, x.shape) * 2 / x.shape[0] * (x - y),
-            lambda g: safe_downstream(g, x.shape) * 2 / x.shape[0] * (y - x)
+            lambda g: safe_downstream(g, x.shape) * 2 / x.shape[0] * (y - x),
         ],
     )
 
@@ -104,6 +100,5 @@ def mse(x: np.array, y: np.array) -> Tuple[np.array, Sequence[Vjp]]:
 def mean(*inputs: np.array) -> Tuple[np.array, Sequence[Vjp]]:
     """Assumes all the shapes are the same."""
     return np.mean(np.vstack(inputs), axis=0), [
-        lambda g: 1 / len(inputs) * safe_downstream(g, inputs[0].shape)
-        for _ in inputs
+        lambda g: 1 / len(inputs) * safe_downstream(g, inputs[0].shape) for _ in inputs
     ]
