@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from queue import Queue
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 

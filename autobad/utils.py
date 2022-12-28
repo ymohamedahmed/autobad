@@ -2,7 +2,6 @@ from typing import Dict, Optional
 
 import graphviz
 
-from autobad.core import Tensor
 from autobad.graph import Graph
 
 
