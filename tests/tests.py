@@ -125,7 +125,7 @@ def test_cross_entropy():
     assert np.allclose(l.value, value)
     assert np.allclose(W.grad, grads[0])
     assert np.allclose(b.grad, grads[1])
-    assert np.allclose(x.grad, grads[2], atol=1e-5)
+    assert np.allclose(x.grad, grads[2], atol=1e-7)
 
 
 def test_need_grad():
